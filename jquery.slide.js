@@ -1,4 +1,15 @@
 ( function( $ ) {
+
+  // hello Internet Explorer, if you don't know this method, then I'll teach you ;-) --R
+  if( !Array.indexOf ) {
+    Array.prototype.indexOf = function(idx) {
+      for(var i=0; i<this.length; i++) {
+        if( this[i] == idx) return i;
+      }
+      return -1;
+    }
+	}
+  
   $.extend( $.fn, {
     slide: function( o ) {
       var $slides = this.children();
@@ -21,117 +32,194 @@
         prevControlText: 'prev',
         prevControlClass: 'slide-prev',
 
-        randomizeSlides: false,
+        randomizeSlides: false,       // not yet implemented
         
         // css
         wrapperClass: 'slide-wrapper',
 
         // callbacks
-        onBeforeSlide: function() {},
-        onAfterSlide:  function() {},
-        
-        onBeforeLastSlide: function() {},
-        onAfterLastSlide:  function() {},
+        onBeforeSlideOut: function() {},
+        onAfterSlideOut:  function() {},
+
+        onBeforeSlideIn: function() {},
+        onAfterSlideIn:  function() {}, 
 
         // slides
         slides: $slides,
-        firstNumber: 0,
-        lastNumber: $slides.length - 1,
-        currentNumber: 0,
+        firstSlideNumber: 0,
+        lastSlideNumber: $slides.length - 1,
+        currentSlideNumber: 0,
+        previousSlideNumber: null,
 
         visited: []
       }, o );
-      
+
       // apply the options as element data
       this.data( 'slide', options );
       this._resetCycleVars(); // init for cycleVisited array
-      
+
       // init
       this._initWrapper( options );
-      
+
       if( options.controls ) {
         this._initSlideControls( options );
         this.enableSlideControls();
       };
 
       // go to starting slide
-      this.slideTo( options.currentNumber );
+      this.slideTo( options.currentSlideNumber );
     },
 
-    // slide functions
-    slideNext: function() {
-      var number = this._nextSlideNumber();
-
-      // check whether to randomize the number
-      if( this.data('slide').randomizeSlides ) number = this._randomSlideNumber();
-
-      this.slideTo( number );
+    /*
+     * Slides to the next slide
+     *
+     * @example Slide to the next slide
+     *   $('#slider').slideNext();
+     *
+     */
+    slideNext: function( caller ) {
+      if( this.data('slide').randomizeSlides ) {
+        this.slideTo( this._randomSlideNumber(), caller );
+      } else {
+        this.slideTo( this._nextSlideNumber(), caller );
+      }
     },
 
-    slidePrev: function() {
-      var number = this._prevSlideNumber();
-
-      // check whether to randomize the number
-      if( this.data('slide').randomizeSlides ) number = this._randomSlideNumber();
-
-      this.slideTo( number );
-    },
-    
-    slideTo: function( number ) {
-      // update the cycle variables/counters
-      this._updateVisited( number );
-
-      // before callbacks
-      if( this._isLastSlide() ) this.data('slide').onBeforeLastSlide();
-      this.data('slide').onBeforeSlide();
-
-      // actual slide action
-      this.data('slide').currentNumber = number; //set current slide
-      this._applyTransition(); // perform the transition
-
-
-      // after callbacks
-      this.data('slide').onAfterSlide();
-
-      if( this._isLastSlide() ) {
-        this._resetCycleVars();
-        this.data('slide').onAfterLastSlide();
-      };
+    /*
+     * Slides to the previous slide
+     *
+     * @example Slide to the previous slide
+     *   $('#slider').slidePrev();
+     *
+     */
+    slidePrev: function( caller ) {
+      if( this.data('slide').randomizeSlides ) {
+        this.slideTo( this._randomSlideNumber(), caller );
+      } else {
+        this.slideTo( this._prevSlideNumber(), caller );
+      }
     },
 
+    /*
+     * Slides to the given slide number
+     *
+     * @example Slide to the first slide
+     *   $('#slider').slideTo( 0 );
+     *
+     * @example Slide to the second slide
+     *   $('#slider').slideTo( 1 );
+     *
+     * @param [ Integer ] number  The numeric value of the slide to transition to
+     * 
+     */
+    slideTo: function( number, caller ) {
+      this.queue( 'slide', function(next) {
+        $(this).disableSlideControls();
+        $(this).data('slide').onBeforeSlideOut.call(this, $(this).data('slide').currentSlideNumber, number, caller );
+
+        next();
+      });
+
+      this._queuedTransitionTo( number, function(next) {
+        var $_this = $(this);
+
+        $_this.data('slide').onAfterSlideOut.call(this, $(this).data('slide').currentSlideNumber, number, caller );
+
+        if( $_this.isSlideCycleCompleted() ) $_this._resetCycleVars();
+        
+        $_this._updateVisited( number );
+        $_this.data('slide').previousSlideNumber = $_this.data('slide').currentSlideNumber;
+        $_this.data('slide').currentSlideNumber = number;
+
+        $_this.data('slide').onBeforeSlideIn.call(this, number, $(this).data('slide').previousSlideNumber, caller );
+
+        next();
+      });
+
+      this.queue( 'slide', function(next) {
+        $(this).data('slide').onAfterSlideIn.call(this, number, $(this).data('slide').previousSlideNumber, caller );
+        $(this).enableSlideControls();
+
+        next();
+      });
+
+      this.dequeue( 'slide' ); // execute
+    }, 
+
+    /*
+     * Enables the slider controls
+     *
+     * @example Enable slider controls
+     *   $('#slider').enableSlideControls();
+     *   
+     */
     enableSlideControls: function() {
       var _this = this;
       var options = $(this).data('slide');
 
       if( options.next ) {
         $(options.next).bind( 'click.slideNext', function() {
-          _this.slideNext();
+          _this.slideNext(this);
           return false;
-        });
+        }).removeAttr( 'disabled' );
       };
 
       if( options.prev ) {
         $(options.prev).bind( 'click.slidePrev', function() {
-          _this.slidePrev();
+          _this.slidePrev(this);
           return false;
-        });
+        }).removeAttr( 'disabled' );
       };
-    }, 
-
-    disableSlideControls: function() {
-      var options = this.data('slide');
-      
-      if( options.next ) $(options.next).unbind( 'click.slideNext' );
-      if( options.prev ) $(options.prev).unbind( 'click.slidePrev' );
     },
 
+    /*
+     * Disables the slider controls
+     *
+     * @example Disable slider controls
+     *   $('#slider').disableSlideControls();
+     *
+     */
+    disableSlideControls: function() {
+      var options = this.data('slide');
+
+      if( options.next ) $(options.next).attr('disabled', true).unbind( 'click.slideNext' );
+      if( options.prev ) $(options.prev).attr('disabled', true).unbind( 'click.slidePrev' );
+    },
+
+    /*
+     * Determines whether all slides have been viewed for one cycle
+     *
+     * @example Check if cycle is complete
+     *   $('#slider').isSlideCycleCompleted();
+     *
+     * @return [ true, false ]
+     */
+    isSlideCycleCompleted: function() {
+      var cycleVisited = this.data('slide').cycleVisited;
+
+      for( var i=0; i<=this.data('slide').lastSlideNumber; i++) {
+        if( cycleVisited[i] == 0 ) return false;
+      };
+
+      return true;
+    },
+
+    /*
+     * Aborts anything happening (clears the internal queue)
+     *
+     * @example
+     *   $('#slider').abort();
+     */
+    abort: function() {
+      $(this).clearQueue( 'slide' );
+    },
     
     // private
     _initWrapper: function( options ) {
       // add wrapper
       var style = { height: this.outerHeight()+'px', width: this.outerWidth()+'px' };
       this.wrap('<div class="'+ options.wrapperClass +'" style="height: '+style.height+'; width: '+style.width+'; overflow: hidden; position: relative"></div>');
-      
+
       // update parent
       this.css({
         height: '999999px',
@@ -169,81 +257,72 @@
 
     _resetCycleVars: function() {
       this.data('slide').cycleVisited = [];
-      this.data('slide').notCycleVisited = [];
+      this.data('slide').cycleNotVisited = [];
 
-      for( var i=this.data('slide').firstNumber; i<=this.data('slide').lastNumber; i++ ) {
+      for( var i=this.data('slide').firstSlideNumber; i<=this.data('slide').lastSlideNumber; i++ ) {
         this.data('slide').cycleVisited[i] = 0;
-        this.data('slide').notCycleVisited.push(i);
+        this.data('slide').cycleNotVisited.push(i);
       };
     },
 
-    _currentSlide: function() {
+    _slideFor: function( number ) {
       var $slides = this.data('slide').slides;
-      return $( $slides[this.data('slide').currentNumber] );
+
+      return $( $slides[number] );
     },
 
     _nextSlideNumber: function() {
-      if( this.data('slide').currentNumber == this.data('slide').lastNumber ) {
-        return this.data('slide').firstNumber;
+      if( this.data('slide').currentSlideNumber == this.data('slide').lastSlideNumber ) {
+        return this.data('slide').firstSlideNumber;
       };
 
-      return this.data('slide').currentNumber + 1;
+      return this.data('slide').currentSlideNumber + 1;
     },
 
     _prevSlideNumber: function() {
-      if( this.data('slide').currentNumber == this.data('slide').firstNumber ) {
-        return this.data('slide').lastNumber;
+      if( this.data('slide').currentSlideNumber == this.data('slide').firstSlideNumber ) {
+        return this.data('slide').lastSlideNumber;
       };
 
-      return this.data('slide').currentNumber - 1;
+      return this.data('slide').currentSlideNumber - 1;
     },
 
     _randomSlideNumber: function() {
-      var index = Math.floor(Math.random() * this.data('slide').notCycleVisited.length);
-      return this.data('slide').notCycleVisited[index];
+      var index = Math.floor(Math.random() * this.data('slide').cycleNotVisited.length);
+      return this.data('slide').cycleNotVisited[index];
     },
 
-    // returns true of false depending on whether all slides were visited for a current cycle
-    _isLastSlide: function() {
-      var cycleVisited = this.data('slide').cycleVisited;
-      
-      for( var i=0; i<=this.data('slide').lastNumber; i++) {
-        if( cycleVisited[i] == 0 ) return false;
-      };
-
-      return true;
-    },
-
-    _applyTransition: function() {
+    _queuedTransitionTo: function( number, callback ) {
+      var _this = this;
       var transition = this.data('slide').transition;
-      var position = { 'top': '-' + this._currentSlide().position().top + 'px' };
 
-      switch( transition ) {
-        case 'fade':
-          this.fadeOut().
-            css( position ).
-            fadeIn();
-          break;
-        case 'toggle':
-          this.hide().
-            css( position ).
-            show();
-          break;
-        default:
-          this.animate( position );
-      }
-    },
+      var top = this._slideFor( number ).position().top;
+      var position = { 'top': '-'+ top +'px' };
+      
+      this.queue( 'slide', function(next) {
+//        console.log( 'fadeOut ('+ $(this).attr('class') +')' );
+        $(this).animate({opacity:"hide"}, next); // fadeOut
+      }).queue( 'slide', function(next) {
+        callback.call(this, next);
+      }).queue( 'slide', function(next) {
+//        console.log( ' * css' );
+        $(this).css( position ); next();
+      }).queue( 'slide', function(next) {
+//        console.log( ' * fadeIn ('+ $(this).attr('class') +')' );
+        $(this).animate({opacity:"show"}, next); // fadeIn
+      });
+    }, 
 
     _updateVisited: function( number ) {
       // TODO: should refactor this and put it into some _init function --R
-      if( this.data('slide').visited[number] == undefined ) this.data('slide').visited[number] = 0;
+      if( this.data('slide').visited[number] == 'undefined' ) this.data('slide').visited[number] = 0;
 
       this.data('slide').visited[number] += 1;
       this.data('slide').cycleVisited[number] += 1;
 
       // remove from `not visited array`
-      var index = this.data('slide').notCycleVisited.indexOf( number );
-      this.data('slide').notCycleVisited.splice( index, 1 );
+      var index = this.data('slide').cycleNotVisited.indexOf( number );
+      this.data('slide').cycleNotVisited.splice( index, 1 );
     }
     
   });
