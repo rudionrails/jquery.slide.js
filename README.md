@@ -42,7 +42,8 @@ jQuery 1.2.6 or higher (http://jquery.com/)
 
 ## Licensing & Terms of Use
 
-This plugin is dual-licensed under the GNU General Public License V2 and the MIT License and
-is copyright 2011 Rudolf Schmidt.
+Dual licensed under the MIT or GPL Version 2 licenses.
+
+Copyright 2011, Rudolf Schmidt
 
 
