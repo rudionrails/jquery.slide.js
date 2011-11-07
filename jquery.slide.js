@@ -1,3 +1,10 @@
+/*!
+ * jQuery.slide.js
+ * http://github.com/rudionrails/jquery.slide.js
+ *
+ * Copyright 2011, Rudolf Schmidt
+ * Dual licensed under the MIT or GPL Version 2 licenses.
+ */
 ( function( $ ) {
 
   // hello Internet Explorer, if you don't know this method, then I'll teach you ;-) --R
